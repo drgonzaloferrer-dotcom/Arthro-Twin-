@@ -3,7 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador rKA + CPAK v9.24.1 · Dr. Gonzalo Ferrer</title>
+<title>rKA + CPAK · Entorno de razonamiento preoperatorio · v9.25 · Dr. Gonzalo Ferrer</title>
+<!-- =====================================================================
+     rKA + CPAK - Entorno de razonamiento preoperatorio  ·  v9.25
+     (c) 2026 Gonzalo Ferrer Aguayo. Todos los derechos reservados.
+     Obra protegida por la Ley N. 17.336 sobre Propiedad Intelectual (Chile).
+     Prohibida su reproduccion, distribucion, modificacion, descompilacion
+     o explotacion comercial, total o parcial, sin autorizacion escrita
+     del autor. El acceso publico a este archivo no constituye licencia.
+     ===================================================================== -->
+<meta name="author" content="Gonzalo Ferrer Aguayo">
+<meta name="copyright" content="(c) 2026 Gonzalo Ferrer Aguayo. Todos los derechos reservados.">
+<meta name="description" content="Entorno de razonamiento preoperatorio para artroplastia total de rodilla. Herramienta de apoyo docente. No es dispositivo medico.">
 <style>
   :root {
     --bg: #f7f6f2;
@@ -74,6 +85,37 @@
     line-height: 1.5;
   }
   .container { max-width: 820px; margin: 0 auto; }
+
+  /* ---- BANCO DE TRABAJO: controles y vista coronal en la misma pantalla ---- */
+  .workbench { display: block; }
+  .workbench > .card { margin-bottom: 16px; }
+  .workbench-visual { min-width: 0; }
+
+  /* Pantallas anchas: dos columnas, el gráfico fijo mientras se mueven los sliders */
+  @media (min-width: 1000px) {
+    .container { max-width: 1240px; }
+    .workbench {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .workbench > .card { margin-bottom: 0; }
+    .workbench-visual {
+      position: sticky;
+      top: 12px;
+      align-self: start;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+    }
+    /* el resto de la página conserva el ancho de lectura cómodo */
+    .container > .card,
+    .container > .header,
+    .container > .decision-panel,
+    .container > .actions,
+    .container > .footer,
+    .container > pre { max-width: 900px; margin-left: auto; margin-right: auto; }
+  }
   h1 { margin: 0 0 4px; font-size: 22px; font-weight: 500; }
   .subtitle { margin: 0; font-size: 13px; color: var(--text-sec); }
   .header {
@@ -475,12 +517,33 @@
     color: var(--text);
     box-shadow: 0 0 0 0.5px var(--border);
   }
-  .implant-svg {
+  /* Contenedor de relacion fija: no depende de la altura intrinseca del SVG,
+     que iOS Safari resuelve distinto que Chrome. */
+  .implant-svg-wrap {
+    position: relative;
     width: 100%;
-    height: auto;
+    max-width: 74vh;              /* limita la altura via el ancho (500/460) */
+    margin: 0 auto;
+    background: var(--bg);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .implant-svg-wrap::before {
+    content: "";
+    display: block;
+    padding-top: 92%;             /* 460 / 500 */
+  }
+  .implant-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
     display: block;
     background: var(--bg);
     border-radius: var(--radius-md);
+  }
+  @media (max-width: 999px) {
+    .implant-svg-wrap { max-width: 100%; }
   }
   .implant-legend {
     display: flex;
@@ -945,19 +1008,57 @@
     button, .actions, .preset-row, input[type="range"] { display: none; }
     .card { break-inside: avoid; }
     #plan_resumen.visible { display: block; }
+    .print-note { display: block !important; border: 1.5px solid #000; padding: 10px 12px;
+                  margin-bottom: 14px; font-size: 11px; line-height: 1.45; }
   }
 </style>
 </head>
 <body>
+<script>
+/* DIAGNOSTICO v9.26 - ES5 puro, se registra antes que el script principal
+   para capturar tambien errores de sintaxis de este ultimo. */
+(function(){
+  var errs = [];
+  window.__diagErrs = errs;
+  function pintar(){
+    var el = document.getElementById('diag_banner');
+    if (!el || !errs.length) return;
+    el.style.display = 'block';
+    el.innerHTML = '<b>ERROR DE JAVASCRIPT</b><br>' + errs.join('<br>') +
+                   '<br><span style="font-size:10px">' + navigator.userAgent + '</span>';
+  }
+  window.addEventListener('error', function(e){
+    var msg = (e && e.message) ? e.message : 'error desconocido';
+    errs.push(msg + '  [linea ' + ((e && e.lineno) || '?') + ':' + ((e && e.colno) || '?') + ']');
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', pintar);
+    } else { pintar(); }
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    errs.push('promesa rechazada: ' + ((e && e.reason && e.reason.message) || (e && e.reason) || '?'));
+    pintar();
+  });
+})();
+</script>
 <div class="container">
+
+  <div id="diag_banner" style="display:none; background:#fcebea; border:2px solid #c0392b; color:#7b241c; padding:12px 14px; border-radius:8px; margin-bottom:14px; font-size:12px; line-height:1.5; word-break:break-word;"></div>
+
+  <div class="print-note" style="display: none;">
+    <b>DOCUMENTO DOCENTE — NO FORMA PARTE DE LA FICHA CLÍNICA.</b><br>
+    Material de trabajo para discusión y planificación preoperatoria. Las resecciones y gaps son referencias
+    estimadas que deben validarse con caliper, gaps, navegación o robot, y con el criterio del cirujano
+    tratante. No constituye indicación quirúrgica, informe clínico ni dispositivo médico.<br>
+    © 2026 Dr. Gonzalo Ferrer Aguayo. Todos los derechos reservados.
+  </div>
 
   <div class="header">
     <div>
       <h1>Simulador rKA + CPAK</h1>
-      <p class="subtitle">Planificación dinámica con vista coronal en tiempo real, recomendación clínica y alertas de seguridad</p>
+      <p class="subtitle">Entorno de razonamiento preoperatorio: discierne fenotipo constitucional de desgaste adquirido, estructura el análisis y anticipa gaps. El cirujano decide.</p>
     </div>
     <div class="header-tools">
-      <div class="version">v9.24.1 · Fix signo rotación tibial (varo/valgo correcto ambos lados) · Dr. Gonzalo Ferrer</div>
+      <div class="version">v9.25 · Reencuadre: la herramienta estructura, no recomienda · Dr. Gonzalo Ferrer</div>
       <button id="btn_nuevo_caso" type="button">Nuevo caso neutral</button>
     </div>
   </div>
@@ -975,11 +1076,6 @@
         <div class="decision-tile-label">Datos medidos</div>
         <div class="decision-tile-value" id="top_datos_medidos">—</div>
         <div class="decision-tile-note" id="top_datos_note">Entrada del punto 1; no es recomendación.</div>
-      </div>
-      <div class="decision-tile">
-        <div class="decision-tile-label">Recomendación automática</div>
-        <div class="decision-tile-value" id="top_plan_sugerido">—</div>
-        <div class="decision-tile-note" id="top_plan_note">—</div>
       </div>
       <div class="decision-tile">
         <div class="decision-tile-label">Simulación actual</div>
@@ -1003,15 +1099,14 @@
       </div>
     </div>
     <div class="decision-actions">
-      <button id="btn_aplicar_seguro" type="button">Aplicar plan sugerido</button>
       <button id="btn_ir_grafico" type="button">Ver gráfico dinámico</button>
-      <button id="btn_ir_reco" type="button">Ver recomendación detallada</button>
+      <button id="btn_ir_reco" type="button">Ver síntesis del caso</button>
     </div>
     <div class="jla-jlo-box">
       <b>Diferencia visible:</b> JLO clasifica el fenotipo CPAK (<span id="top_jlo_value">—</span>). JLA aquí es una inclinación visual estimada de la línea articular respecto a 180° (<span id="top_jla_value">—</span>), útil para entender cómo queda el dibujo, no para reemplazar la medición radiográfica formal.
     </div>
     <div class="visible-change">
-      <span>Datos ≠ recomendación</span><span>JLO/JLA separados</span><span>Aplicar recomendación</span><span>Gráfico original preservado</span>
+      <span>Datos ≠ interpretación</span><span>JLO/JLA separados</span><span>Constitucional ≠ adquirido</span><span>El cirujano decide</span>
     </div>
   </div>
 
@@ -1019,6 +1114,11 @@
   <!-- INPUTS -->
   <div class="card muted">
     <div class="section-title">1. Mediciones del paciente (telemetría)</div>
+    <div class="clinical-note" style="margin-bottom: 12px;">
+      <b>No ingrese datos identificatorios del paciente</b> (nombre, RUT, ficha, fecha de nacimiento).
+      Esta herramienta trabaja únicamente con valores angulares y no requiere identificación. Nada de lo que
+      escriba aquí se transmite ni se almacena: todo el cálculo ocurre en su propio dispositivo.
+    </div>
     <div class="grid grid-4">
       <div><label>Lado</label>
         <select id="lado">
@@ -1026,16 +1126,16 @@
           <option value="izquierda">Rodilla izquierda</option>
         </select>
       </div>
-      <div><label>MPTA (°)</label><input type="number" id="mpta" value="91" step="0.5" min="75" max="100"></div>
-      <div><label>LDFA (°)</label><input type="number" id="ldfa" value="83" step="0.5" min="75" max="100"></div>
-      <div><label>mHKA (°)</label><input type="number" id="mhka" value="6" step="0.5" min="0" max="20"></div>
+      <div><label>MPTA (°)</label><input type="number" id="mpta" value="90" step="0.5" min="75" max="100"></div>
+      <div><label>LDFA (°)</label><input type="number" id="ldfa" value="90" step="0.5" min="75" max="100"></div>
+      <div><label>mHKA (°)</label><input type="number" id="mhka" value="0" step="0.5" min="0" max="20"></div>
     </div>
     <div class="grid grid-4" style="margin-top: 12px;">
       <div><label>Dirección mHKA</label>
         <select id="dir_hka">
+          <option value="neutro" selected>Neutro</option>
           <option value="valgo">Valgo</option>
           <option value="varo">Varo</option>
-          <option value="neutro">Neutro</option>
         </select>
       </div>
       <div><label>MCL</label>
@@ -1107,7 +1207,7 @@
       </div>
     </div>
     <div class="clinical-note">
-      <b>Uso clínico:</b> este simulador separa fenotipo constitucional, desgaste intraarticular y plan quirúrgico. Las resecciones son referencias docentes; deben validarse con caliper, gaps, navegación/robot o criterio intraoperatorio.
+      <b>Uso clínico:</b> esta herramienta separa fenotipo constitucional, desgaste intraarticular y plan quirúrgico. Las resecciones son referencias docentes; deben validarse con caliper, gaps, navegación/robot o criterio intraoperatorio.
     </div>
   </div>
 
@@ -1335,6 +1435,9 @@
     </div>
   </div>
 
+  <!-- BANCO DE TRABAJO: sección 3 (controles) + sección 4 (vista coronal) -->
+  <div class="workbench">
+
   <!-- SIMULADOR -->
   <div class="card simulator">
     <div class="section-title">
@@ -1346,25 +1449,6 @@
       <button class="preset" data-preset="rka" type="button">rKA restrictivo seguro</button>
       <button class="preset" data-preset="neutro" type="button">Neutro mecánico 90/90</button>
       <button class="preset" data-preset="conservador" type="button">Conservador 2°/2°</button>
-    </div>
-
-    <div class="slider-row">
-      <div class="slider-head">
-        <span class="slider-title">Corrección tibial (MPTA)</span>
-        <div class="seg-control">
-          <button id="modo_tibia_inc" class="active" type="button">Δ desde medido</button>
-          <button id="modo_tibia_abs" type="button">Valor absoluto</button>
-        </div>
-        <span class="slider-value" id="tibia_slider_val">0.0°</span>
-      </div>
-      <input type="range" id="tibia_slider" min="-8" max="8" step="0.5" value="0">
-      <div class="slider-range">
-        <span id="tibia_range_min">−8° (más varo)</span>
-        <span id="tibia_range_max">+8° (más valgo)</span>
-      </div>
-      <div class="slider-result">
-        MPTA final: <b id="tibia_result">91.0°</b> · <span id="tibia_action">sin corrección</span>
-      </div>
     </div>
 
     <div class="slider-row">
@@ -1386,21 +1470,40 @@
       </div>
     </div>
 
+    <div class="slider-row">
+      <div class="slider-head">
+        <span class="slider-title">Corrección tibial (MPTA)</span>
+        <div class="seg-control">
+          <button id="modo_tibia_inc" class="active" type="button">Δ desde medido</button>
+          <button id="modo_tibia_abs" type="button">Valor absoluto</button>
+        </div>
+        <span class="slider-value" id="tibia_slider_val">0.0°</span>
+      </div>
+      <input type="range" id="tibia_slider" min="-8" max="8" step="0.5" value="0">
+      <div class="slider-range">
+        <span id="tibia_range_min">−8° (más varo)</span>
+        <span id="tibia_range_max">+8° (más valgo)</span>
+      </div>
+      <div class="slider-result">
+        MPTA final: <b id="tibia_result">91.0°</b> · <span id="tibia_action">sin corrección</span>
+      </div>
+    </div>
+
     <p class="hint">
       <b>Ejemplo:</b> paciente con MPTA nativo 81°, quiero corregir a 87°.<br>
       <b>Modo Absoluto:</b> muevo el slider a <b>87</b> (defino el ángulo final).<br>
       <b>Modo Δ desde medido:</b> muevo el slider a <b>+6</b> (defino cuánto voy a corregir: 81+6=87).<br>
-      Tibia → MPTA: subir = más valgo, bajar = más varo. Fémur → LDFA: subir = más varo, bajar = más valgo.
+      Fémur → LDFA: subir = más varo, bajar = más valgo. Tibia → MPTA: subir = más valgo, bajar = más varo.
     </p>
     <div style="margin-top: 8px; padding: 8px 10px; background: var(--teal-bg); border-left: 3px solid var(--teal-border); border-radius: var(--radius-md); font-size: 11px; color: var(--teal-text);">
       <b>💡 El simulador calcula cortes de fémur distal y tibia proximal en mm (valores aproximados, no exactos).</b> La precisión final depende de datos intraop que solo el robot/navegación puede medir (gaps, calibración, rotación fina).
     </div>
   </div>
 
-  <!-- VISTA CORONAL ARRIBA -->
-  <div class="card surgical">
-    <div class="section-title">4. Vista coronal — implante y línea articular</div>
-    <div class="subsection-title">Vista coronal — posición del implante y línea articular</div>
+  <!-- VISTA CORONAL: columna fija junto a los controles -->
+  <div class="card surgical workbench-visual">
+    <div class="section-title">4. Vista coronal en tiempo real</div>
+    <div class="subsection-title">Posición del implante y línea articular · se actualiza con cada ajuste de los controles</div>
 
     <div class="implant-view">
       <div class="implant-view-header">
@@ -1411,9 +1514,11 @@
           <button id="view_compare" type="button">Comparar</button>
         </div>
       </div>
-      <svg class="implant-svg" id="implant_svg" viewBox="0 0 500 460" preserveAspectRatio="xMidYMid meet">
-        <!-- Se dibuja dinámicamente -->
-      </svg>
+      <div class="implant-svg-wrap">
+        <svg class="implant-svg" id="implant_svg" viewBox="0 0 500 460" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">
+          <!-- Se dibuja dinámicamente -->
+        </svg>
+      </div>
       <div class="implant-legend">
         <span><span class="implant-legend-swatch" style="background: var(--surface-2);"></span>Hueso nativo</span>
         <span><span class="implant-legend-swatch" style="background: rgba(186,117,23,0.25); border-color: var(--warning-strong);"></span>Hueso resecado</span>
@@ -1446,6 +1551,8 @@
     </div>
 
   </div>
+
+  </div><!-- /workbench -->
 
   <!-- RESULTADO -->
   <div class="card">
@@ -1580,7 +1687,7 @@
     <div class="params-row">
       <div class="param-pill">
         <span class="param-pill-label">Slope tibial</span>
-        <span class="param-pill-value" id="slope_tibial">—</span>
+        <span class="param-pill-value" id="slope_tibial_valor">—</span>
         <span class="param-pill-note" id="slope_tibial_note">—</span>
       </div>
       <div class="param-pill">
@@ -1636,31 +1743,31 @@
 
   <!-- PROBLEMAS ANTICIPADOS -->
   <div class="card">
-    <div class="section-title">7. Problemas anticipados y soluciones</div>
+    <div class="section-title">7. Consideraciones a anticipar</div>
     <ul class="problem-list" id="problemas_lista"></ul>
   </div>
 
   <!-- SCORE -->
   <div class="card">
     <div class="score-header">
-      <div class="section-title" style="margin: 0;">8. Score heurístico de complejidad</div>
+      <div class="section-title" style="margin: 0;">8. Complejidad estimada del caso</div>
       <div class="pill" id="score_label">—</div>
     </div>
     <div class="progress-track"><div class="progress-bar" id="score_bar"></div></div>
     <div class="score-legend">
-      <div>0-30 Baja</div>
-      <div>31-60 Media</div>
-      <div>61-100 Alta</div>
+      <div>Baja</div>
+      <div>Media</div>
+      <div>Alta</div>
     </div>
     <div class="clinical-note" style="margin-top: 10px;">
-      <b>Advertencia:</b> score heurístico no validado. Úselo para docencia, discusión preoperatoria y anticipación de complejidad; no como predictor clínico formal.
+      <b>Advertencia:</b> estimación heurística no validada. Ordena la discusión preoperatoria y anticipa complejidad; no es un predictor clínico ni una medida cuantitativa.
     </div>
     <div class="factores" id="score_factores"></div>
   </div>
 
   <!-- EVALUADOR -->
   <div class="card" id="eval_box">
-    <div class="section-title">9. Filosofía recomendada y alertas globales</div>
+    <div class="section-title">9. Filosofías compatibles con estos datos y alertas globales</div>
     <div class="eval-filosofia" id="eval_filosofia">—</div>
     <div class="eval-alertas" id="eval_alertas"></div>
   </div>
@@ -1668,7 +1775,7 @@
 
   <!-- RECOMENDACIÓN DINÁMICA -->
   <div class="card" id="reco_box">
-    <div class="section-title">10. Recomendación dinámica para el caso simulado</div>
+    <div class="section-title">10. Síntesis razonada del caso</div>
     <div id="reco_card" class="recommendation-card caution">
       <div class="recommendation-head">
         <div class="recommendation-title" id="reco_titulo">—</div>
@@ -1676,10 +1783,10 @@
       </div>
       <div class="recommendation-main" id="reco_resumen">—</div>
       <div class="recommendation-grid">
-        <div class="recommendation-block"><b>Plan A</b><span id="reco_plan_a">—</span></div>
-        <div class="recommendation-block"><b>Plan B / seguridad</b><span id="reco_plan_b">—</span></div>
+        <div class="recommendation-block"><b>Escenario A</b><span id="reco_plan_a">—</span></div>
+        <div class="recommendation-block"><b>Escenario B / margen de seguridad</b><span id="reco_plan_b">—</span></div>
         <div class="recommendation-block"><b>Confirmar antes de cortar</b><span id="reco_confirmar">—</span></div>
-        <div class="recommendation-block"><b>Frase defendible</b><span id="reco_frase">—</span></div>
+        <div class="recommendation-block"><b>Fundamento clínico</b><span id="reco_frase">—</span></div>
       </div>
     </div>
   </div>
@@ -1689,12 +1796,16 @@
     <button id="btn_resumen" type="button">Generar resumen de texto</button>
     <button id="btn_imprimir" type="button">Imprimir / Guardar PDF</button>
     <button id="btn_reset" type="button">Resetear todo</button>
+    <button id="btn_diag" type="button">Diagnóstico técnico</button>
   </div>
+  <pre id="diag_out" style="display:none; white-space:pre-wrap; word-break:break-word; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:11px; line-height:1.5; margin-top:10px;"></pre>
 
   <pre id="plan_resumen"></pre>
 
   <div class="footer">
-    Documento de trabajo clínico · CPAK + rKA según Vendittoli, MacDessi, Griffiths-Jones · Score no validado · No reemplaza balance intraoperatorio ni juicio quirúrgico
+    Herramienta de apoyo docente · CPAK + rKA según Vendittoli, MacDessi, Griffiths-Jones · Estimaciones heurísticas no validadas · No es dispositivo médico y no reemplaza el balance intraoperatorio ni el juicio del cirujano tratante<br>
+    © 2026 Dr. Gonzalo Ferrer Aguayo · Todos los derechos reservados · Ley N.° 17.336<br>
+    <b>iPhone / iPad:</b> abrir en Safari. La vista previa de la app Archivos bloquea JavaScript y la herramienta no calcula ni dibuja.
   </div>
 
 </div>
@@ -1702,6 +1813,39 @@
 <script>
 (function(){
   function $(id){ return document.getElementById(id); }
+
+  // =========================================================================
+  // COMPATIBILIDAD iOS / SAFARI  (v9.26)
+  // Dos limitaciones de WebKit que dejaban el grafico en blanco en iPhone:
+  //   1) asignar innerHTML sobre un elemento <svg> no crea los hijos en el
+  //      espacio de nombres SVG, asi que no se dibuja nada.
+  //   2) var(--x) dentro de atributos de presentacion (fill=, stroke=) no se
+  //      resuelve: el trazo queda sin color.
+  // setSvgContent() resuelve las variables a color literal y parsea el marcado
+  // en el espacio de nombres correcto con DOMParser.
+  // =========================================================================
+  function setSvgContent(el, markup){
+    if (!el) return;
+    const cs = getComputedStyle(document.documentElement);
+    const cache = {};
+    const flat = String(markup).replace(/var\((--[\w-]+)\)/g, function(m, name){
+      if (!(name in cache)){
+        const v = (cs.getPropertyValue(name) || '').trim();
+        cache[name] = v || 'currentColor';
+      }
+      return cache[name];
+    });
+    try {
+      const doc = new DOMParser().parseFromString(
+        '<svg xmlns="http://www.w3.org/2000/svg">' + flat + '</svg>', 'image/svg+xml');
+      if (doc.getElementsByTagName('parsererror').length) throw new Error('parsererror');
+      while (el.firstChild) el.removeChild(el.firstChild);
+      const kids = Array.prototype.slice.call(doc.documentElement.childNodes);
+      for (let i = 0; i < kids.length; i++) el.appendChild(document.importNode(kids[i], true));
+    } catch (e) {
+      el.innerHTML = flat;   // ultimo recurso
+    }
+  }
 
   let modoTibia = 'incremental';
   let modoFemur = 'incremental';
@@ -2549,7 +2693,7 @@
       const latX = esDerecha ? (cx - 160) : (cx + 160);
       s += '<text x="' + medX + '" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text-sec)" font-family="-apple-system, sans-serif">MEDIAL</text>';
       s += '<text x="' + latX + '" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text-sec)" font-family="-apple-system, sans-serif">LATERAL</text>';
-      s += '<text x="' + (W - 12) + '" y="22" text-anchor="end" font-size="12" font-weight="600" fill="var(--teal-text)" font-family="-apple-system, sans-serif">' + (esDerecha ? 'R · DERECHA' : 'L · IZQUIERDA') + '</text>';
+      s += '<text x="' + cx + '" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="var(--teal-text)" font-family="-apple-system, sans-serif">' + (esDerecha ? 'R · DERECHA' : 'L · IZQUIERDA') + '</text>';
 
       s += '<text x="10" y="' + (hipY + 5) + '" font-size="10" fill="var(--text-ter)" font-family="-apple-system, sans-serif">Cadera</text>';
       s += '<text x="10" y="' + (kneeY + 5) + '" font-size="10" fill="var(--text-ter)" font-family="-apple-system, sans-serif">Rodilla</text>';
@@ -2639,7 +2783,7 @@
         s += '<text x="' + (W - 14) + '" y="' + (ankleY + 46) + '" text-anchor="end" font-size="9" fill="#dc3545" opacity="0.8" font-family="-apple-system, sans-serif">aHKA hueso ' + ahkaPostLabel + '</text>';
       }
 
-      svg.innerHTML = s;
+      setSvgContent(svg, s);
 
       const ahka_pre_text = Math.abs(ahka).toFixed(1) + '° ' + (ahka < -0.1 ? 'varo' : (ahka > 0.1 ? 'valgo' : 'neutro'));
       const ahka_post_text = Math.abs(ahka_plan).toFixed(1) + '° ' + (ahka_plan < -0.1 ? 'varo' : (ahka_plan > 0.1 ? 'valgo' : 'neutro'));
@@ -2770,7 +2914,7 @@
       svgContent += '<marker id="arrow_tlat" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="' + lat_color + '"/></marker>';
       svgContent += '</defs>';
 
-      svg.innerHTML = svgContent;
+      setSvgContent(svg, svgContent);
     }
 
     function dibujarFemur(){
@@ -2886,7 +3030,7 @@
       svgContent += '<marker id="arrow_flat" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="' + lat_color + '"/></marker>';
       svgContent += '</defs>';
 
-      svg.innerHTML = svgContent;
+      setSvgContent(svg, svgContent);
     }
 
     function dibujarPostFemur(){
@@ -2955,7 +3099,7 @@
       svgContent += '<marker id="arrow_plat_s" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 10 0 L 0 5 L 10 10 z" fill="' + lat_color + '"/></marker>';
       svgContent += '</defs>';
 
-      svg.innerHTML = svgContent;
+      setSvgContent(svg, svgContent);
     }
 
     // Aplicar contenido (resección REAL considerando colapso/hipoplasia)
@@ -2990,7 +3134,7 @@
     // v9.9 — reordenar cajas de resumen según lado para coincidir con dibujo AP
     reordenarCajasPorLado(esDerecha);
 
-    $('slope_tibial').textContent = slope + '°';
+    $('slope_tibial_valor').textContent = slope + '°';
     $('slope_tibial_note').textContent = slope_note;
     $('rot_femoral').textContent = rot_text;
     $('rot_femoral_note').textContent = rot_note;
@@ -3299,7 +3443,7 @@
 
     $('score_bar').style.width = score + '%';
     $('score_bar').style.background = color_score;
-    $('score_label').textContent = score + '/100 · ' + nivel;
+    $('score_label').textContent = nivel;
     $('score_label').style.color = color_score;
 
     if (factores.length === 0){
@@ -3471,16 +3615,16 @@
       recoPlanA = 'Target automático inicial: ' + targetTxt + ' (' + cambioRecoTxt + '). aHKA recomendado ' + fmtSignedDeg(ahka_reco) + ' · mHKA estimado ' + fmtSignedDeg(mhka_reco_estimado) + '.';
       recoPlanB = 'Simulación actual: ' + simTxt + '. Si decide mantenerla, documentar por qué y validar con gap balancing antes del corte definitivo.';
       recoConfirmar = 'MPTA/LDFA finales, JLO/JLA, aHKA planificado, mHKA estimado y estabilidad tras cortes de prueba.';
-      recoFrase = 'Personalizar no significa copiar ni neutralizar por reflejo; significa elegir un target defendible y seguro.';
+      recoFrase = 'Personalizar no significa copiar ni neutralizar por reflejo; significa elegir un target razonado y seguro.';
     } else if (scoreBasal <= 30){
       recoNivel = 'ok';
-      recoTitulo = recomendacionCoincideConMedido ? 'Plan defendible: preservar fenotipo medido' : 'Plan defendible: aplicar recomendación rKA/FA';
+      recoTitulo = recomendacionCoincideConMedido ? 'Escenario coherente: preservar el fenotipo medido' : 'Escenario coherente: corrección rKA/FA dentro de límites';
       recoBadge = 'Baja complejidad';
       recoResumen = recomendacionCoincideConMedido ? '<b>Recomendación:</b> en este caso el target coincide con los datos medidos porque ya están dentro de márgenes seguros y no hay alertas mayores.' : '<b>Recomendación:</b> aplicar la corrección sugerida para mantener personalización dentro de zona segura.';
       recoPlanA = 'Target automático inicial: ' + targetTxt + ' (' + cambioRecoTxt + ') · aHKA recomendado ' + fmtSignedDeg(ahka_reco) + '. Confirmar con cortes de prueba.';
       recoPlanB = 'Simulación actual: ' + simTxt + '. Si los gaps no acompañan, hacer microajustes en el componente que genera la asimetría.';
       recoConfirmar = 'Gaps 0°/90°, tracking patelar, extensión completa, estabilidad coronal y congruencia de línea articular.';
-      recoFrase = 'Este plan es defendible porque respeta el fenotipo dentro de límites seguros y mantiene una estrategia reversible intraoperatoriamente.';
+      recoFrase = 'Este plan respeta el fenotipo dentro de límites seguros y mantiene una estrategia reversible intraoperatoriamente.';
     } else {
       recoNivel = 'caution';
       recoTitulo = 'Plan razonable, pero requiere validación intraoperatoria estricta';
@@ -3489,19 +3633,17 @@
       recoPlanA = 'Target automático inicial: ' + targetTxt + ' (' + cambioRecoTxt + ').';
       recoPlanB = 'Simulación actual: ' + simTxt + '. Acercar progresivamente a zona segura si aparece inestabilidad, deformidad rígida o gap no controlable.';
       recoConfirmar = 'Competencia ligamentaria, defecto óseo, JLCA, gaps en extensión/flexión y estabilidad con componentes de prueba.';
-      recoFrase = 'La simulación propone; el balance intraoperatorio autoriza.';
+      recoFrase = 'El análisis orienta; el balance intraoperatorio decide.';
     }
 
     $('decision_panel').className = 'card decision-panel ' + recoNivel;
     $('top_decision_title').textContent = recoTitulo;
-    $('top_decision_badge').textContent = recoBadge + ' · score ' + score + '/100';
+    $('top_decision_badge').textContent = recoBadge;
     $('top_decision_summary').innerHTML = recoResumen;
     $('top_datos_medidos').textContent = medTxt;
     $('top_datos_note').textContent = 'aHKA medido ' + fmtSignedDeg(ahka) + ' · JLO medido ' + jlo.toFixed(1) + '°';
-    $('top_plan_sugerido').textContent = targetTxt;
-    $('top_plan_note').textContent = cambioRecoTxt + ' · aHKA recomendado ' + fmtSignedDeg(ahka_reco) + (targetReco.noResolubleSimple ? ' · CORRECCIÓN LIMITADA: no es target definitivo' : '');
     $('top_sim_actual').textContent = simTxt;
-    $('top_sim_note').textContent = (simDifiereDeReco ? 'No coincide con la recomendación.' : 'Coincide con la recomendación.') + ' aHKA simulado ' + fmtSignedDeg(ahka_plan);
+    $('top_sim_note').textContent = (simDifiereDeReco ? 'Difiere del escenario de referencia.' : 'Coincide con el escenario de referencia.') + ' aHKA planificado ' + fmtSignedDeg(ahka_plan);
     let riesgoDom = 'Balance/gaps';
     let riesgoNota = 'Confirmar estabilidad antes de corte definitivo.';
     if (targetReco.noResolubleSimple) { riesgoDom = 'Deformidad ósea extrema'; riesgoNota = 'No forzar 87–93 por corte intraarticular; planificar alternativa.'; }
@@ -3555,20 +3697,20 @@
       '• Fémur posterior: Med ' + c.post_med + ' / Lat ' + c.post_lat + ' mm',
       '• Rotación femoral: ' + c.rot_text,
       '',
-      'SCORE HEURÍSTICO DE COMPLEJIDAD: ' + c.score + '/100 — ' + c.nivel,
-      'FILOSOFÍA: ' + c.filosofia,
+      'COMPLEJIDAD ESTIMADA (heurística, no validada): ' + c.nivel,
+      'FILOSOFÍAS COMPATIBLES: ' + c.filosofia,
       '',
-      'RECOMENDACIÓN DINÁMICA:',
+      'SÍNTESIS RAZONADA:',
       (c.noResolubleSimple ? '• ALERTA: deformidad extrema; no forzar 87–93 por resección intraarticular simple.' : null),
       '• ' + c.recoTitulo + ' (' + c.recoBadge + ')',
-      '• Plan A: ' + c.recoPlanA,
-      '• Plan B: ' + c.recoPlanB,
+      '• Escenario A: ' + c.recoPlanA,
+      '• Escenario B: ' + c.recoPlanB,
       '• Confirmar: ' + c.recoConfirmar,
-      '• Frase: ' + c.recoFrase,
+      '• Fundamento: ' + c.recoFrase,
       '',
       'CONTEXTO: MCL ' + c.mcl + ' | LCL/PLC ' + c.lcl + ' | Defecto ' + c.def + ' | Patela ' + c.pat,
       '',
-      'PROBLEMAS ANTICIPADOS:',
+      'CONSIDERACIONES A ANTICIPAR:',
       c.problemas.map(p => '• ' + p.titulo).join('\n'),
       '',
       'ALERTAS GLOBALES:',
@@ -3668,7 +3810,6 @@
     document.querySelectorAll('.preset').forEach(b => b.classList.remove('active'));
     calcular();
   }
-  $('btn_aplicar_seguro').addEventListener('click', aplicarTargetSeguro);
   $('btn_ir_grafico').addEventListener('click', () => $('implant_svg').scrollIntoView({behavior:'smooth', block:'center'}));
   $('btn_ir_reco').addEventListener('click', () => $('reco_box').scrollIntoView({behavior:'smooth', block:'start'}));
 
@@ -3695,6 +3836,49 @@
   $('btn_nuevo_caso').addEventListener('click', resetearCaso);
 
   calcular();
+  window.__ready = true;
+})();
+</script>
+
+<script>
+/* Panel de diagnostico - ES5 puro, independiente del script principal */
+(function(){
+  var btn = document.getElementById('btn_diag');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    var out = document.getElementById('diag_out');
+    var svgs = [], all = document.querySelectorAll('svg'), i;
+    for (i = 0; i < all.length; i++){
+      var ns = all[i].firstElementChild ? all[i].firstElementChild.namespaceURI : 'sin hijos';
+      svgs.push((all[i].id || '?') + ': ' + all[i].children.length + ' hijos, ns=' +
+                (ns === 'http://www.w3.org/2000/svg' ? 'SVG ok' : ns));
+    }
+    function v(id){ var e = document.getElementById(id); return e ? (e.value !== undefined ? e.value : e.textContent) : 'AUSENTE'; }
+    function t(id){ var e = document.getElementById(id); return e ? e.textContent : 'AUSENTE'; }
+    var wrap = document.querySelector('.implant-svg-wrap');
+    var box = wrap ? wrap.getBoundingClientRect() : null;
+    var lineas = [
+      'NAVEGADOR: ' + navigator.userAgent,
+      'PANTALLA: ' + window.innerWidth + 'x' + window.innerHeight + ' · dpr ' + (window.devicePixelRatio || '?'),
+      '',
+      'SCRIPT PRINCIPAL EJECUTADO: ' + (window.__ready ? 'SI' : 'NO  <-- si dice NO, el problema es aqui'),
+      'DOMParser disponible: ' + (typeof DOMParser !== 'undefined' ? 'si' : 'NO'),
+      'CONTENEDOR DEL GRAFICO: ' + (box ? Math.round(box.width) + 'x' + Math.round(box.height) + ' px' : 'AUSENTE'),
+      '',
+      'ENTRADAS: MPTA ' + v('mpta') + ' · LDFA ' + v('ldfa') + ' · mHKA ' + v('mhka'),
+      'SLIDERS: femoral ' + v('femur_slider') + ' · tibial ' + v('tibia_slider'),
+      'SALIDAS: LDFA final ' + t('femur_result') + ' · MPTA final ' + t('tibia_result'),
+      'aHKA planificado: ' + t('eje_final'),
+      '',
+      'SVG EN LA PAGINA:',
+      '  ' + svgs.join('\n  '),
+      '',
+      'ERRORES CAPTURADOS: ' + ((window.__diagErrs && window.__diagErrs.length) ? '\n  ' + window.__diagErrs.join('\n  ') : 'ninguno')
+    ];
+    out.style.display = 'block';
+    out.textContent = lineas.join('\n');
+    out.scrollIntoView({ block: 'start' });
+  });
 })();
 </script>
 </body>
