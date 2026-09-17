@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>rKA + CPAK · Entorno de razonamiento preoperatorio · v9.25 · Dr. Gonzalo Ferrer</title>
+<title>rKA + CPAK · Entorno de razonamiento preoperatorio · v9.28 · Dr. Gonzalo Ferrer</title>
 <!-- =====================================================================
-     rKA + CPAK - Entorno de razonamiento preoperatorio  ·  v9.25
+     rKA + CPAK - Entorno de razonamiento preoperatorio  ·  v9.28
      (c) 2026 Gonzalo Ferrer Aguayo. Todos los derechos reservados.
      Obra protegida por la Ley N. 17.336 sobre Propiedad Intelectual (Chile).
      Prohibida su reproduccion, distribucion, modificacion, descompilacion
@@ -1020,9 +1020,12 @@
 (function(){
   var errs = [];
   window.__diagErrs = errs;
+  function diagActivo(){
+    return /[?&]diag=1/.test(window.location.search);
+  }
   function pintar(){
     var el = document.getElementById('diag_banner');
-    if (!el || !errs.length) return;
+    if (!el || !errs.length || !diagActivo()) return;
     el.style.display = 'block';
     el.innerHTML = '<b>ERROR DE JAVASCRIPT</b><br>' + errs.join('<br>') +
                    '<br><span style="font-size:10px">' + navigator.userAgent + '</span>';
@@ -1058,7 +1061,7 @@
       <p class="subtitle">Entorno de razonamiento preoperatorio: discierne fenotipo constitucional de desgaste adquirido, estructura el análisis y anticipa gaps. El cirujano decide.</p>
     </div>
     <div class="header-tools">
-      <div class="version">v9.25 · Reencuadre: la herramienta estructura, no recomienda · Dr. Gonzalo Ferrer</div>
+      <div class="version">v9.28 · Dr. Gonzalo Ferrer</div>
       <button id="btn_nuevo_caso" type="button">Nuevo caso neutral</button>
     </div>
   </div>
@@ -1177,6 +1180,17 @@
           <option value="parcial">Parcial</option>
           <option value="rigida">Rígida / no reductible</option>
         </select>
+      </div>
+      <div><label>Morfología condilar femoral <span style="color:var(--purple-text); font-size:10px;">define el corte</span></label>
+        <select id="morfologia_condilar">
+          <option value="no_definida" selected>No definida — no asumir</option>
+          <option value="simetricos">Cóndilos simétricos</option>
+          <option value="hipo_lateral">Hipoplasia lateral</option>
+          <option value="hipo_medial">Hipoplasia medial</option>
+        </select>
+      </div>
+      <div><label>Déficit condilar (mm) <span style="color:var(--text-ter); font-size:10px;">solo si hay hipoplasia</span></label>
+        <input type="number" id="hipoplasia_mm" value="4" step="0.5" min="0" max="8">
       </div>
       <div><label>Compartimento colapsado</label>
         <select id="compartimento">
@@ -1597,6 +1611,7 @@
   <!-- PLAN OPERATORIO -->
   <div class="card surgical">
     <div class="section-title">6. Plan operatorio estimado</div>
+    <div class="clinical-note" id="morfologia_alerta" style="display:none; margin-bottom:12px;"></div>
 
     <div class="subsection-title">Cortes estimados de referencia — vista coronal esquemática</div>
 
@@ -1796,7 +1811,7 @@
     <button id="btn_resumen" type="button">Generar resumen de texto</button>
     <button id="btn_imprimir" type="button">Imprimir / Guardar PDF</button>
     <button id="btn_reset" type="button">Resetear todo</button>
-    <button id="btn_diag" type="button">Diagnóstico técnico</button>
+    <button id="btn_diag" type="button" style="display:none;">Diagnóstico técnico</button>
   </div>
   <pre id="diag_out" style="display:none; white-space:pre-wrap; word-break:break-word; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:11px; line-height:1.5; margin-top:10px;"></pre>
 
@@ -2391,13 +2406,19 @@
     // v9.22 · RESECCIÓN FEMORAL REAL considerando hipoplasia condilar
     let corte_fem_med_real = corte_fem_med;
     let corte_fem_lat_real = corte_fem_lat;
-    if (ldfa < 89){
-      // Valgo femoral: cóndilo lateral hipoplásico → resección real menor por lateral
-      corte_fem_lat_real = Math.max(0, corte_fem_lat - colapso_mm);
-    } else if (ldfa > 91){
-      // Varo femoral: cóndilo medial hipoplásico → resección real menor por medial
-      corte_fem_med_real = Math.max(0, corte_fem_med - colapso_mm);
+    // v9.28 · La asimetria condilar ya NO se infiere del LDFA.
+    // Un valgo femoral puede deberse a hipoplasia condilar lateral, a desgaste
+    // lateral adquirido, o a una orientacion valguizante con condilos normales.
+    // El LDFA no distingue entre esas tres causas, asi que la morfologia la
+    // declara el cirujano y el deficit se gradua en milimetros.
+    const morfologia = $('morfologia_condilar') ? $('morfologia_condilar').value : 'no_definida';
+    const hipo_mm = $('hipoplasia_mm') ? (parseFloat($('hipoplasia_mm').value) || 0) : 0;
+    if (morfologia === 'hipo_lateral'){
+      corte_fem_lat_real = Math.max(0, corte_fem_lat - hipo_mm);
+    } else if (morfologia === 'hipo_medial'){
+      corte_fem_med_real = Math.max(0, corte_fem_med - hipo_mm);
     }
+    // 'no_definida' y 'simetricos' no aplican descuento alguno.
     corte_fem_med_real = Math.round(corte_fem_med_real * 10) / 10;
     corte_fem_lat_real = Math.round(corte_fem_lat_real * 10) / 10;
 
@@ -2933,13 +2954,12 @@
       const med_color = colorEstado(femur_med_estado);
       const lat_color = colorEstado(femur_lat_estado);
 
-      // Hipoplasia condilar según ASIMETRÍA NATIVA del fémur (LDFA)
-      // LDFA <90 = valgo femoral → cóndilo LATERAL hipoplásico
-      // LDFA >90 = varo femoral → cóndilo MEDIAL hipoplásico
-      // LDFA ≈90 = fémur perpendicular (sin hipoplasia)
-      const hipoplasiaLateral = (ldfa < 89);
-      const hipoplasiaMedial = (ldfa > 91);
-      const hipo_px = (BASE_INTACTO - BASE_COLAPSADO) * mmToPx;
+      // v9.28 · El dibujo refleja la morfologia DECLARADA, no una inferida del LDFA.
+      const _morf = $('morfologia_condilar') ? $('morfologia_condilar').value : 'no_definida';
+      const _hipoMm = $('hipoplasia_mm') ? (parseFloat($('hipoplasia_mm').value) || 0) : 0;
+      const hipoplasiaLateral = (_morf === 'hipo_lateral' && _hipoMm > 0);
+      const hipoplasiaMedial  = (_morf === 'hipo_medial'  && _hipoMm > 0);
+      const hipo_px = _hipoMm * mmToPx;
       const med_native_y = hipoplasiaMedial ? (bone_bot - hipo_px) : bone_bot;
       const lat_native_y = hipoplasiaLateral ? (bone_bot - hipo_px) : bone_bot;
 
@@ -3100,6 +3120,31 @@
       svgContent += '</defs>';
 
       setSvgContent(svg, svgContent);
+    }
+
+    // v9.28 · Alerta: el LDFA sugiere revisar la morfologia, no la determina
+    if ($('morfologia_alerta')){
+      let _al = '';
+      if (morfologia === 'no_definida'){
+        if (ldfa < 89){
+          _al = '<b>Valgo femoral (LDFA ' + ldfa.toFixed(1) + '°):</b> descartar hipoplasia condilar lateral con TAC o RM antes de definir la referencia del corte distal. ' +
+                'Un LDFA bajo puede deberse a hipoplasia lateral, a desgaste lateral adquirido o a una orientación valguizante con cóndilos normales: la resección cambia en cada caso. ' +
+                'Mientras la morfología no se declare, la herramienta no asume asimetría.';
+        } else if (ldfa > 91){
+          _al = '<b>Varo femoral (LDFA ' + ldfa.toFixed(1) + '°):</b> verificar morfología condilar medial antes de definir la referencia del corte distal. ' +
+                'Mientras la morfología no se declare, la herramienta no asume asimetría.';
+        } else {
+          _al = 'Morfología condilar no declarada. Con LDFA ' + ldfa.toFixed(1) + '° la asimetría condilar es menos probable, pero la herramienta no la asume: declárela para que el corte la considere.';
+        }
+      } else if (morfologia === 'simetricos'){
+        _al = 'Cóndilos declarados simétricos: la resección distal se referencia por igual en ambos lados.';
+      } else {
+        const _lado = (morfologia === 'hipo_lateral') ? 'LATERAL' : 'MEDIAL';
+        _al = '<b>Hipoplasia ' + _lado + ' declarada (' + hipo_mm.toFixed(1) + ' mm):</b> la resección real por ese lado se reduce en esa magnitud. ' +
+              'Referenciar el corte desde el cóndilo intacto y confirmar el déficit intraoperatoriamente antes de resecar.';
+      }
+      $('morfologia_alerta').innerHTML = _al;
+      $('morfologia_alerta').style.display = 'block';
     }
 
     // Aplicar contenido (resección REAL considerando colapso/hipoplasia)
@@ -3755,7 +3800,7 @@
     calcular();
   }
 
-  ['lado','mpta','ldfa','mhka','dir_hka','mcl','lcl','defecto','patela','jlca','reductibilidad','compartimento','desgaste_med','desgaste_lat','insert_planificado','rotacion_externa','slope_tibial'].forEach(id => {
+  ['lado','mpta','ldfa','mhka','dir_hka','mcl','lcl','defecto','patela','jlca','reductibilidad','compartimento','desgaste_med','desgaste_lat','insert_planificado','rotacion_externa','slope_tibial','morfologia_condilar','hipoplasia_mm'].forEach(id => {
     $(id).addEventListener('input', () => {
       document.querySelectorAll('.preset').forEach(b => b.classList.remove('active'));
       if (id === 'mpta' && modoTibia === 'absoluto') $('tibia_slider').value = $('mpta').value;
@@ -3845,6 +3890,9 @@
 (function(){
   var btn = document.getElementById('btn_diag');
   if (!btn) return;
+  /* Solo visible con ?diag=1 en la URL — para soporte, no para uso clinico */
+  if (!/[?&]diag=1/.test(window.location.search)) return;
+  btn.style.display = '';
   btn.addEventListener('click', function(){
     var out = document.getElementById('diag_out');
     var svgs = [], all = document.querySelectorAll('svg'), i;
